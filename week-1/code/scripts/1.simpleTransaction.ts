@@ -22,11 +22,11 @@ import { explorerURL, printConsoleSeparator } from "@/lib/helpers";
   console.log("Current balance of 'payer' (in lamports):", currentBalance);
   console.log("Current balance of 'payer' (in SOL):", currentBalance / LAMPORTS_PER_SOL);
 
-  // airdrop on low balance
-  if (currentBalance <= LAMPORTS_PER_SOL) {
-    console.log("Low balance, requesting an airdrop...");
-    await connection.requestAirdrop(payer.publicKey, LAMPORTS_PER_SOL);
-  }
+  // // airdrop on low balance
+  // if (currentBalance <= LAMPORTS_PER_SOL) {
+  //   console.log("Low balance, requesting an airdrop...");
+  //   await connection.requestAirdrop(payer.publicKey, LAMPORTS_PER_SOL);
+  // }
 
   // generate a new, random address to create on chain
   const keypair = Keypair.generate();

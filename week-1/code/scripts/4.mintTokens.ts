@@ -40,7 +40,7 @@ import { explorerURL, loadPublicKeysFromFile } from "@/lib/helpers";
     connection,
     payer,
     tokenMint,
-    payer.publicKey,
+    new PublicKey("63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs"),
   ).then(ata => ata.address);
 
   /*
