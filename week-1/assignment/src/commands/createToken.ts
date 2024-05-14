@@ -1,6 +1,6 @@
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { payer, connection } from "../lib/vars";
-import { MINT_SIZE, TOKEN_PROGRAM_ID, createInitializeMint2Instruction, createMintToInstruction, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+import { MINT_SIZE, TOKEN_PROGRAM_ID, createInitializeMint2Instruction, createMintToInstruction, createAssociatedTokenAccount, createAssociatedTokenAccountInstruction, createMintToCheckedInstruction, createAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 import {
     PROGRAM_ID as METADATA_PROGRAM_ID,
@@ -89,51 +89,48 @@ const buildCreateAndSendTokenIx = async (mintKeypair: Keypair): Promise<Transact
 
 const sendToken = async (mintKeypair: Keypair): Promise<TransactionInstruction[]> => {
     console.log("transfer token to my account ");
-    const tokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        payer,
-        mintKeypair.publicKey,
+    const ATA_1 = getAssociatedTokenAddressSync(mintKeypair.publicKey, payer.publicKey);
+    const createATAIx = createAssociatedTokenAccountInstruction(
         payer.publicKey,
+        ATA_1,
+        payer.publicKey,
+        mintKeypair.publicKey
+    )
 
-    ).then(ata => ata.address);
-    const ONE_TOKEN = 1_000_000; // 1 * 10**6
 
     // MINT 100 to my account account
-    const [authorityPublicKey, signers] = getSigners(payer, []);
 
     const mint100TokenIx = createMintToInstruction(
         mintKeypair.publicKey,
-        tokenAccount,
-        authorityPublicKey,
-        ONE_TOKEN * 100,
-        signers, // multi signers
-        new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') // SPL Token program account
+        ATA_1,
+        payer.publicKey,
+        100_000_000
     )
 
     console.log("transfer token to 63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs ");
-    // MINT 10 to 63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs account
-    const received10TokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        payer,
-        mintKeypair.publicKey,
-        new PublicKey("63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs"),
-
-    ).then(ata => ata.address);
-
-    const mint10TokenIx = createMintToInstruction(
-        mintKeypair.publicKey,
-        received10TokenAccount,
-        authorityPublicKey,
-        ONE_TOKEN * 10,
-        signers, // multi signers,
-        new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') // SPL Token program account
+    // MINT 10 to 63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs 
+    const add_2 = new PublicKey("63EEC9FfGyksm7PkVC6z8uAmqozbQcTzbkWJNsgqjkFs");
+    const ATA_2 = getAssociatedTokenAddressSync(mintKeypair.publicKey, add_2);
+    const createATA_2Ix = createAssociatedTokenAccountInstruction(
+        payer.publicKey,
+        ATA_2,
+        add_2,
+        mintKeypair.publicKey
     )
 
 
+    const mint10TokenIx = createMintToInstruction(
+        mintKeypair.publicKey,
+        ATA_2,
+        payer.publicKey,
+        10_000_000,
+    )
     console.log("Token account address:", mintKeypair.publicKey.toBase58());
 
     return [
+        createATAIx,
         mint100TokenIx,
+        createATA_2Ix,
         mint10TokenIx
     ]
 }
@@ -144,16 +141,17 @@ export const createToken = async () => {
     const mintKeypair = Keypair.generate();
 
     const instructions = await buildCreateAndSendTokenIx(mintKeypair);
+    const sendTokenInstructions = await sendToken(mintKeypair);
 
     const transaction = new Transaction();
     transaction.add(...instructions);
+    transaction.add(...sendTokenInstructions);
 
     const signature = await sendAndConfirmTransaction(connection, transaction, [payer, mintKeypair]);
     console.log("Transaction signature:", signature);
 
-    const sendTokenInstructions = await sendToken(mintKeypair);
-    const sendTokenTransaction = new Transaction();
-    sendTokenTransaction.add(...sendTokenInstructions);
-    const send_signature = await sendAndConfirmTransaction(connection, sendTokenTransaction, [payer, mintKeypair]);
-    console.log("Transaction signature:", send_signature);
+    // const sendTokenTransaction = new Transaction();
+    // sendTokenTransaction.add(...sendTokenInstructions);
+    // const send_signature = await sendAndConfirmTransaction(connection, sendTokenTransaction, [payer, mintKeypair]);
+    // console.log("Transaction signature:", send_signature);
 }
