@@ -1,7 +1,7 @@
 import { Cluster, PublicKey } from "@solana/web3.js";
 
 export const TODO_PROGRAM_ID = new PublicKey(
-  "3uhD8YzbpWyTTqe2DWTncYUpfuNmLfEymMNVBTNbLm64"
+  "6yqnmGWqYe159aJsA6RKxYHQ2arhuTLJJ8D6QTH3dYK"
 );
 
 export function getProgramId(cluster: Cluster) {
