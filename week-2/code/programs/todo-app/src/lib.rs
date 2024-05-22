@@ -57,6 +57,22 @@ pub mod todo_app {
         todo.completed = !current_state;
         Ok(())
     }
+
+    pub fn delete_todo(ctx: Context<DeleteTodo>) -> Result<()> {
+        let profile = &mut ctx.accounts.profile;
+        let todo = &mut ctx.accounts.todo;
+
+        if todo.profile != profile.key() {
+            return err!(AppError::InvalidAuthority);
+        }
+
+        profile.todo_count -= 1;
+
+        let lamport_des: AccountInfo = profile.to_account_info();
+        let _ = ctx.accounts.todo.close(lamport_des);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -105,6 +121,23 @@ pub struct ToggleTodo<'info> {
     creator: Signer<'info>,
 
     #[account(mut, 
+        // has_one = authority
+        constraint = profile.authority == creator.key() @ AppError::InvalidAuthority
+    )]
+    profile: Account<'info, Profile>,
+
+    #[account(mut,  constraint = todo.profile == profile.key() @ AppError::InvalidAuthority)]
+    todo: Account<'info, Todo>,
+
+    system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DeleteTodo<'info> {
+    #[account(mut)]
+    creator: Signer<'info>,
+
+    #[account(mut,
         // has_one = authority
         constraint = profile.authority == creator.key() @ AppError::InvalidAuthority
     )]

@@ -38,6 +38,7 @@ describe("todo-app", () => {
   it("Create todo successfully", async () => {
     let profileAccount = await program.account.profile.fetch(profile);
     const currentTodoCount = profileAccount.todoCount;
+    console.log("currentTodoCount", currentTodoCount);
 
     const [todo] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("todo"), profile.toBytes(), Buffer.from([currentTodoCount])],
@@ -56,7 +57,6 @@ describe("todo-app", () => {
 
     console.log("Your transaction signature", tx);
     const todoAccount = await program.account.todo.fetch(todo);
-
     expect(todoAccount.content).to.equal(content);
     expect(todoAccount.profile.toBase58()).to.equal(profile.toBase58());
     expect(todoAccount.completed).to.equal(false);
@@ -115,13 +115,6 @@ describe("todo-app", () => {
 
   it("Create todo failed by providing invalid creator", async () => {
     const anotherPayer = anchor.web3.Keypair.generate();
-
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(
-        anotherPayer.publicKey,
-        anchor.web3.LAMPORTS_PER_SOL
-      )
-    );
 
     console.log("anotherPayer", anotherPayer.publicKey.toBase58());
 

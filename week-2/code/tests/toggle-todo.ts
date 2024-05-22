@@ -23,7 +23,7 @@ describe("toggle todo", () => {
 
     it("Toggle todo index 0 successfully", async () => {
         let profileAccount = await program.account.profile.fetch(profile);
-        const currentTodoCount = 0;
+        const currentTodoCount = 9;
 
         const [todo] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("todo"), profile.toBytes(), Buffer.from([currentTodoCount])],
@@ -46,6 +46,55 @@ describe("toggle todo", () => {
         const todoAccount = await program.account.todo.fetch(todo);
         console.log("New state", todoAccount);
         expect(todoAccount.completed).to.equal(!currentStateAccount.completed);
+    });
+
+    it("Toggle other's todo failed by providing invalid creator", async () => {
+
+        const anotherPayer = anchor.web3.Keypair.generate();
+
+        console.log("anotherPayer", anotherPayer.publicKey.toBase58());
+
+
+        withErrorTest(async () => {
+            try {
+                let profileAccount = await program.account.profile.fetch(profile);
+                const currentTodoCount = 0;
+
+                const [todo] = anchor.web3.PublicKey.findProgramAddressSync(
+                    [Buffer.from("todo"), profile.toBytes(), Buffer.from([currentTodoCount])],
+                    program.programId
+                );
+
+                const currentStateAccount = await program.account.todo.fetch(todo);
+                console.log("Current state", currentStateAccount);
+                const tx = await program.rpc
+                    .toggleTodo({
+                        accounts: {
+                            creator: anotherPayer.publicKey,
+                            profile,
+                            todo,
+                            systemProgram: anchor.web3.SystemProgram.programId,
+                        },
+                        signers: [anotherPayer]
+                    });
+
+                console.log("Your transaction signature", tx);
+                const todoAccount = await program.account.todo.fetch(todo);
+                console.log("New state", todoAccount);
+                expect(todoAccount.completed).to.equal(!currentStateAccount.completed);
+            }
+            catch (error) {
+                assert.isTrue(error instanceof anchor.AnchorError);
+                const err: anchor.AnchorError = error;
+                assert.strictEqual(err.error.errorMessage, "Invalid authority");
+                assert.strictEqual(err.error.errorCode.number, 6002);
+                assert.strictEqual(err.error.errorCode.code, "InvalidAuthority");
+                assert.strictEqual(
+                    err.program.toString(),
+                    program.programId.toString()
+                );
+            }
+        })
     });
 
 })

@@ -17,5 +17,6 @@ wallet = "/home/longtran/.config/solana/id.json"
 [scripts]
 # test = "npx ts-mocha tests/**/create-profile.ts"
 # test = "npx ts-mocha tests/**/create-todo.ts"
-test = "npx ts-mocha tests/**/toggle-todo.ts"
+# test = "npx ts-mocha tests/**/toggle-todo.ts"
+test = "npx ts-mocha tests/**/delete-todo.ts"
 
