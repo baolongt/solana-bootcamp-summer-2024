@@ -20,7 +20,8 @@ pub struct Unstake<'info> {
         has_one = mint,
         seeds = [STAKE_INFO_SEED, staker.key().as_ref(), mint.key().as_ref()], 
         bump,
-        constraint = stake_info.staker == staker.key() @ AppError::NotOwner
+        constraint = stake_info.staker == staker.key() @ AppError::NotOwner,
+        close = staker
     )]
     pub stake_info: Account<'info, StakeInfo>,
 
@@ -52,11 +53,15 @@ pub struct Unstake<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
+pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     let stake_info = &ctx.accounts.stake_info;
 
     if !stake_info.is_staked {
         return Err(AppError::NotStaked.into());
+    }
+
+    if amount > stake_info.amount {
+        return Err(AppError::UnstakeMoreThanStaked.into());
     }
 
     let clock = Clock::get()?;
@@ -67,22 +72,22 @@ pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
     // reward 1% of stake amount per block
     let reward_per_block = stake_amount.checked_div(100).unwrap();
 
-    let reward = stake_amount
-        .checked_add(reward_per_block.checked_mul(slot_passed).unwrap())
-        .unwrap();
+    let reward = reward_per_block.checked_mul(slot_passed).unwrap();
 
     msg!("reward: {}", reward);
 
-    if reward < 0 {
+    if reward > 0 {
         let mint_key = ctx.accounts.mint.key();
         let reward_vault_bump = ctx.bumps.reward_vault;
         let reward_vault_signer_seeds: &[&[&[u8]]] = &[
-            &[REWARD_VAULT_SEED, &[reward_vault_bump], mint_key.as_ref()],
+            &[REWARD_VAULT_SEED, mint_key.as_ref(), &[reward_vault_bump]],
         ];
+
+        msg!("bump {}", reward_vault_bump);
 
         transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
                 Transfer {
                     from: ctx.accounts.reward_vault.to_account_info(),
                     to: ctx.accounts.staker_token_account.to_account_info(),
@@ -98,12 +103,12 @@ pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
     let stake_info_bump = ctx.bumps.stake_info;
     let staker_key = ctx.accounts.staker.key();
     let stake_info_signer_seeds: &[&[&[u8]]] = &[
-        &[STAKE_INFO_SEED, staker_key.as_ref(), &[stake_info_bump], mint_key.as_ref()],
+        &[STAKE_INFO_SEED, staker_key.as_ref(), mint_key.as_ref(), &[stake_info_bump]],
     ];
 
     transfer(
         CpiContext::new_with_signer(
-            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
             Transfer {
                 from: ctx.accounts.vault_token_account.to_account_info(),
                 to: ctx.accounts.staker_token_account.to_account_info(),
@@ -111,15 +116,22 @@ pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
             },
             stake_info_signer_seeds
         ),
-        stake_amount
+        amount
     )?;
 
     // update stake_info
     let stake_info = &mut ctx.accounts.stake_info;
 
-    stake_info.stake_at = clock.slot;
-    stake_info.is_staked = false;
-    stake_info.amount = 0;
+    let remaining_amount = stake_info.amount - amount;
+
+    if remaining_amount > 0 {
+        stake_info.amount = remaining_amount;
+    } else {
+        stake_info.stake_at = clock.slot;
+        stake_info.is_staked = false;
+        stake_info.amount = 0;
+        stake_info.close(ctx.accounts.staker.to_account_info())?;
+    }
 
     Ok(())
 }

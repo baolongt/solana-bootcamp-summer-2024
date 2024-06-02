@@ -14,6 +14,7 @@ import {
 } from "@solana/spl-token";
 import { expect } from "chai";
 import { BN } from "bn.js";
+import { loadKeypairFromFile } from "./lib/helper";
 
 describe("stake-program", () => {
   const provider = anchor.AnchorProvider.env();
@@ -21,24 +22,22 @@ describe("stake-program", () => {
 
   const program = anchor.workspace.StakeProgram as Program<StakeProgram>;
 
-  const staker = anchor.web3.Keypair.generate();
+  console.log("get staker pubkey");
+
+  const staker = loadKeypairFromFile();
   let stakerTokenAccount: anchor.web3.PublicKey;
+
+  console.log("Staker pubkey", staker.publicKey.toBase58());
 
   // USDC-fake mint
   const usdcMintKp = anchor.web3.Keypair.generate();
   let rewardVault: anchor.web3.PublicKey;
   let stakeInfo: anchor.web3.PublicKey;
 
+  console.log("USDC mint pubkey", usdcMintKp.publicKey.toBase58());
+
   before(async () => {
     // init staker
-    {
-      await provider.connection.confirmTransaction(
-        await provider.connection.requestAirdrop(
-          staker.publicKey,
-          anchor.web3.LAMPORTS_PER_SOL
-        )
-      );
-    }
     // create USDC-fake mint
     {
       const tx = new anchor.web3.Transaction();
@@ -67,6 +66,8 @@ describe("stake-program", () => {
         usdcMintKp.publicKey,
         staker.publicKey
       );
+
+      console.log("Staker token account", stakerTokenAccount.toBase58());
 
       const createStakerTokenAccountIx =
         createAssociatedTokenAccountInstruction(
@@ -99,9 +100,11 @@ describe("stake-program", () => {
     }
 
     rewardVault = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("reward")],
+      [Buffer.from("reward"), usdcMintKp.publicKey.toBytes()],
       program.programId
     )[0];
+
+    console.log("Reward vault", rewardVault.toBase58());
   });
 
   it("Is initialized!", async () => {
@@ -131,15 +134,20 @@ describe("stake-program", () => {
 
   it("Stake successfully", async () => {
     stakeInfo = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("stake_info"), staker.publicKey.toBytes()],
-      program.programId
+      [Buffer.from("stake_info"), staker.publicKey.toBytes(), usdcMintKp.publicKey.toBytes()],
+      program.programId,
     )[0];
+
+    console.log("Stake info", stakeInfo.toBase58());
 
     const vaultTokenAccount = getAssociatedTokenAddressSync(
       usdcMintKp.publicKey,
       stakeInfo,
       true
     );
+
+    console.log("vaultTokenAccount", vaultTokenAccount.toBase58());
+
 
     const stakeAmount = new BN(100 * 10 ** 6);
 
@@ -193,7 +201,7 @@ describe("stake-program", () => {
       usdcMintKp.publicKey,
       rewardVault,
       provider.publicKey,
-      1000 * 10 ** 6,
+      100 * 10 ** 6,
       []
     );
 
@@ -207,25 +215,36 @@ describe("stake-program", () => {
       true
     );
 
-    const tx = await program.methods
-      .unstake()
-      .accounts({
-        staker: staker.publicKey,
-        mint: usdcMintKp.publicKey,
-        stakeInfo: stakeInfo,
-        vaultTokenAccount: vaultTokenAccount,
-        rewardVault: rewardVault,
-        stakerTokenAccount: stakerTokenAccount,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      })
-      .signers([staker])
-      .rpc();
+    console.log("vaultTokenAccount", vaultTokenAccount.toBase58());
 
-    console.log("Your transaction signature", tx);
+    try {
+
+      const tx = await program.methods
+        .unstake()
+        .accounts({
+          staker: staker.publicKey,
+          mint: usdcMintKp.publicKey,
+          stakeInfo: stakeInfo,
+          vaultTokenAccount: vaultTokenAccount,
+          rewardVault: rewardVault,
+          stakerTokenAccount: stakerTokenAccount,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        })
+        .signers([staker])
+        .rpc();
+
+
+      console.log("Your transaction signature", tx);
+
+    }
+    catch (e) {
+      console.error(e);
+    }
 
     const stakeInfoAccount = await program.account.stakeInfo.fetch(stakeInfo);
+
 
     expect(stakeInfoAccount.isStaked).to.equal(false);
     expect(Number(stakeInfoAccount.amount)).to.equal(0);

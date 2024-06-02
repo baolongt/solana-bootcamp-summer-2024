@@ -13,4 +13,7 @@ pub enum AppError {
 
     #[msg("Staker is not the owner of the stake information")]
     NotOwner,
+
+    #[msg("Unstake amount is less than the staked amount")]
+    UnstakeMoreThanStaked,
 }
